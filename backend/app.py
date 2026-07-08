@@ -174,6 +174,32 @@ def login():
     }), 401
 
 # =========================
+# NEW CHAT
+# =========================
+@app.route('/new-chat', methods=['POST'])
+def new_chat():
+
+    data = request.json
+
+    user_id = data.get("user_id")
+    title = data.get("title", "Chat Baru")
+
+    if not user_id:
+        return jsonify({
+            "message": "user_id wajib diisi."
+        }), 400
+
+    response = supabase.table("chat_sessions").insert({
+        "user_id": user_id,
+        "title": title
+    }).execute()
+
+    return jsonify({
+        "message": "Session berhasil dibuat",
+        "session": response.data[0]
+    })
+
+# =========================
 # CHAT GPT (MULTI TURN)
 # =========================
 @app.route('/chat', methods=['POST'])
@@ -184,9 +210,10 @@ def chat():
         data = request.json
 
         user_id = data.get("user_id")
+        session_id = data.get("session_id")
         pesan = data.get("pesan", "").strip()
-
-        if not user_id or not pesan:
+       
+        if not user_id or not session_id or not pesan:
             return jsonify({
                 "message": "user_id dan pesan wajib diisi."
             }), 400
@@ -196,7 +223,7 @@ def chat():
         # =========================
         history = supabase.table("chats") \
         .select("*") \
-        .eq("user_id", user_id) \
+        .eq("session_id", session_id) \
         .order("created_at", desc=True) \
         .limit(20) \
         .execute()
@@ -299,34 +326,77 @@ def save_chat():
     data = request.json
 
     user_id = data.get("user_id")
+    session_id = data.get("session_id")
     pesan_user = data.get("pesan_user")
     respon_gpt = data.get("respon_gpt", "")
 
-    if not user_id or not pesan_user:
+    if not user_id or not session_id or not pesan_user:
         return jsonify({
             "message": "user_id dan pesan_user wajib diisi."
         }), 400
 
     response = supabase.table("chats").insert({
         "user_id": user_id,
+        "session_id": session_id,
         "pesan_user": pesan_user,
         "respon_gpt": respon_gpt
     }).execute()
 
+    # =========================
+    # UPDATE JUDUL CHAT
+    # =========================
+    session = supabase.table("chat_sessions") \
+            .select("title") \
+            .eq("id", session_id) \
+            .single() \
+            .execute()
+
+    if session.data and session.data["title"] == "Chat Baru":
+
+        judul = pesan_user[:40]
+
+        if len(pesan_user) > 40:
+            judul += "..."
+
+        session = (
+            supabase.table("chat_sessions")
+            .select("title")
+            .eq("id", session_id)
+            .single()
+            .execute()
+        )
+
+    # =========================
+    # RESPONSE
+    # =========================
     return jsonify({
-        "message": "Chat berhasil disimpan",
+         "message": "Chat berhasil disimpan",
         "data": response.data
     })
 
 # =========================
+# GET CHAT SESSIONS
+# =========================
+@app.route('/chat-sessions/<user_id>', methods=['GET'])
+def get_chat_sessions(user_id):
+
+    response = supabase.table("chat_sessions") \
+        .select("*") \
+        .eq("user_id", user_id) \
+        .order("created_at", desc=True) \
+        .execute()
+
+    return jsonify(response.data)
+
+# =========================
 # AMBIL RIWAYAT CHAT
 # =========================
-@app.route('/get-chat/<user_id>', methods=['GET'])
-def get_chat(user_id):
+@app.route('/get-chat/<session_id>', methods=['GET'])
+def get_chat(session_id):
 
     response = supabase.table("chats") \
         .select("*") \
-        .eq("user_id", user_id) \
+        .eq("session_id", session_id) \
         .order("created_at") \
         .execute()
 
