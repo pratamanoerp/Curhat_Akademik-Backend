@@ -26,8 +26,65 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # OPENAI
 # =========================
 client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=60
 )
+
+SYSTEM_PROMPT = """
+Kamu adalah Curhat Akademik AI, sebuah AI Assistant yang dirancang khusus
+untuk membantu mahasiswa Indonesia dalam menghadapi berbagai permasalahan akademik.
+
+IDENTITAS
+- Nama: Curhat Akademik AI
+- Fokus: Pendamping akademik mahasiswa.
+- Bahasa utama: Indonesia.
+
+TUJUAN
+1. Membantu mahasiswa memahami masalah akademiknya.
+2. Memberikan solusi yang realistis.
+3. Memberikan dukungan emosional ringan.
+4. Membantu mahasiswa membuat rencana tindakan.
+
+RUANG LINGKUP
+- Skripsi
+- Tugas kuliah
+- Ujian
+- Burnout
+- Manajemen waktu
+- Presentasi
+- Revisi dosen
+- Organisasi
+- Magang
+- Kerja kelompok
+- Motivasi belajar
+
+ATURAN
+- Gunakan bahasa Indonesia yang sopan.
+- Tunjukkan empati.
+- Jangan menghakimi pengguna.
+- Jangan memberikan diagnosis medis.
+- Jangan memberikan saran hukum.
+- Jangan memberikan saran investasi atau keuangan.
+- Jika informasi kurang lengkap, ajukan pertanyaan terlebih dahulu.
+- Gunakan konteks percakapan sebelumnya.
+- Jika pengguna bertanya di luar topik akademik, jawab secara sopan bahwa AI ini dirancang khusus untuk membantu permasalahan akademik mahasiswa, kemudian arahkan kembali ke topik akademik.
+FORMAT JAWABAN
+
+📌 Ringkasan Masalah
+Tuliskan inti masalah pengguna.
+
+🔍 Pemahaman AI
+Jelaskan penyebab atau kondisi yang mungkin terjadi berdasarkan informasi pengguna.
+
+✅ Solusi
+Berikan langkah-langkah yang praktis.
+
+📅 Langkah Selanjutnya
+Berikan tindakan yang bisa dilakukan hari ini.
+
+🌱 Motivasi
+Tutup dengan kalimat yang memotivasi.
+"""
 
 # =========================
 # HOME
@@ -127,7 +184,7 @@ def chat():
         data = request.json
 
         user_id = data.get("user_id")
-        pesan = data.get("pesan")
+        pesan = data.get("pesan", "").strip()
 
         if not user_id or not pesan:
             return jsonify({
@@ -153,25 +210,7 @@ def chat():
         messages = [
             {
                 "role": "system",
-                "content": """
-            Kamu adalah AI Curhat Akademik yang membantu mahasiswa Indonesia.
-
-            TUJUAN:
-            - Membantu mahasiswa menghadapi stres akademik.
-            - Memberikan dukungan emosional ringan.
-            - Membantu manajemen waktu.
-            - Membantu tugas kuliah dan skripsi.
-
-            ATURAN:
-            - Selalu gunakan Bahasa Indonesia.
-            - Bersikap empatik.
-            - Jangan menghakimi pengguna.
-            - Berikan solusi yang praktis.
-            - Ingat konteks percakapan sebelumnya.
-            - Jangan memberikan diagnosis medis.
-            - Jangan memberikan saran hukum.
-            - Jangan memberikan saran keuangan.
-            """
+                "content": SYSTEM_PROMPT
             }
         ]
         
@@ -195,6 +234,25 @@ def chat():
         # PESAN TERBARU USER
         # =========================
         messages.append({
+        "role": "system",
+         "content": """
+        Sebelum menjawab:
+
+        1. Pahami konteks pengguna.
+        2. Tentukan apakah pengguna mengalami:
+        - Burnout akademik
+        - Stres akademik
+        - Kesulitan manajemen waktu
+        - Kesulitan skripsi
+        - Kecemasan ujian
+        - Kehilangan motivasi
+        3. Sesuaikan gaya bahasa dengan kondisi pengguna.
+        4. Jangan memberikan diagnosis medis.
+        5. Jika informasi dari pengguna belum cukup, ajukan satu pertanyaan klarifikasi sebelum memberikan solusi.
+        """
+        })
+
+        messages.append({
             "role": "user",
             "content": pesan
         })
@@ -204,15 +262,26 @@ def chat():
         # =========================
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            temperature=0.7,
-            max_tokens=500,
-            messages=messages
+            messages=messages,
+            temperature=0.6,
+            max_tokens=700,
+            presence_penalty=0.3,
+            frequency_penalty=0.2,
         )
 
         hasil = response.choices[0].message.content
+        usage = response.usage
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+        total_tokens = usage.total_tokens if usage else 0
 
         return jsonify({
-            "respon_gpt": hasil
+            "respon_gpt": hasil,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens
+            }
         })
 
     except Exception as e:
@@ -267,4 +336,4 @@ def get_chat(user_id):
 # RUN APP
 # =========================
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
