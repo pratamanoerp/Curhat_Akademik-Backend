@@ -178,27 +178,41 @@ def login():
 # =========================
 @app.route('/new-chat', methods=['POST'])
 def new_chat():
+    
+    try:
+        data = request.get_json()
 
-    data = request.json
+        user_id = data.get("user_id")
+        title = data.get("title", "Chat Baru")
 
-    user_id = data.get("user_id")
-    title = data.get("title", "Chat Baru")
+        if not user_id:
+            return jsonify({
+                "message": "user_id wajib diisi."
+            }), 400
 
-    if not user_id:
+        response = supabase.table("chat_sessions").insert({
+            "user_id": user_id,
+            "title": title
+        }).execute()
+
+        print(response)
+        print(response.data)
+
+        if not response.data:
+            return jsonify({
+                "message": "Insert berhasil tetapi data kosong"
+            }), 500
+
         return jsonify({
-            "message": "user_id wajib diisi."
-        }), 400
+            "message": "Session berhasil dibuat",
+            "session": response.data[0]
+        })
 
-    response = supabase.table("chat_sessions").insert({
-        "user_id": user_id,
-        "title": title
-    }).execute()
-
-    return jsonify({
-        "message": "Session berhasil dibuat",
-        "session": response.data[0]
-    })
-
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+    
 # =========================
 # CHAT GPT (MULTI TURN)
 # =========================
@@ -341,15 +355,16 @@ def save_chat():
         "pesan_user": pesan_user,
         "respon_gpt": respon_gpt
     }).execute()
-
     # =========================
     # UPDATE JUDUL CHAT
     # =========================
-    session = supabase.table("chat_sessions") \
-            .select("title") \
-            .eq("id", session_id) \
-            .single() \
-            .execute()
+    session = (
+        supabase.table("chat_sessions")
+        .select("title")
+        .eq("id", session_id)
+        .single()
+        .execute()
+    )
 
     if session.data and session.data["title"] == "Chat Baru":
 
@@ -358,21 +373,20 @@ def save_chat():
         if len(pesan_user) > 40:
             judul += "..."
 
-        session = (
-            supabase.table("chat_sessions")
-            .select("title")
-            .eq("id", session_id)
-            .single()
+        supabase.table("chat_sessions") \
+            .update({
+                "title": judul
+            }) \
+            .eq("id", session_id) \
             .execute()
-        )
-
     # =========================
     # RESPONSE
     # =========================
     return jsonify({
-         "message": "Chat berhasil disimpan",
+        "message": "Chat berhasil disimpan",
         "data": response.data
     })
+    
 
 # =========================
 # GET CHAT SESSIONS
