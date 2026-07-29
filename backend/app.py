@@ -68,6 +68,21 @@ ATURAN
 - Jika informasi kurang lengkap, ajukan pertanyaan terlebih dahulu.
 - Gunakan konteks percakapan sebelumnya.
 - Jika pengguna bertanya di luar topik akademik, jawab secara sopan bahwa AI ini dirancang khusus untuk membantu permasalahan akademik mahasiswa, kemudian arahkan kembali ke topik akademik.
+
+INSTRUKSI PEMROSESAN
+Sebelum memberikan jawaban:
+1. Pahami konteks pengguna berdasarkan pesan yang dikirim dan riwayat percakapan.
+2. Identifikasi apakah pengguna mengalami:
+   - Burnout akademik
+   - Stres akademik
+   - Kesulitan manajemen waktu
+   - Kesulitan skripsi
+   - Kecemasan menghadapi ujian
+   - Kehilangan motivasi belajar
+3. Sesuaikan gaya bahasa dengan kondisi pengguna.
+4. Jangan memberikan diagnosis medis.
+5. Jika informasi dari pengguna belum cukup, ajukan satu pertanyaan klarifikasi sebelum memberikan solusi.
+
 FORMAT JAWABAN
 
 📌 Ringkasan Masalah
@@ -85,6 +100,128 @@ Berikan tindakan yang bisa dilakukan hari ini.
 🌱 Motivasi
 Tutup dengan kalimat yang memotivasi.
 """
+
+# =========================
+# RULE-BASED VALIDATION
+# =========================
+ACADEMIC_KEYWORDS = [
+    "akademik",
+    "kuliah",
+    "kampus",
+    "mahasiswa",
+    "dosen",
+    "skripsi",
+    "tugas",
+    "ujian",
+    "uts",
+    "uas",
+    "sidang",
+    "seminar",
+    "proposal",
+    "penelitian",
+    "presentasi",
+    "kelas",
+    "nilai",
+    "ipk",
+    "magang",
+    "praktikum",
+    "revisi",
+    "bimbingan",
+    "belajar",
+    "semester",
+    "mata kuliah",
+    "organisasi",
+    "kkn",
+    "pkl",
+    "wisuda",
+    "burnout",
+    "stres akademik",
+    "manajemen waktu",
+    "motivasi belajar"
+]
+def is_academic_topic(text):
+    """
+    Mengecek apakah pesan berkaitan dengan topik akademik
+    menggunakan pencocokan kata kunci (Rule-Based Validation).
+    """
+
+    text = text.lower()
+
+    for keyword in ACADEMIC_KEYWORDS:
+        if keyword in text:
+            return True
+
+    return False
+
+# =========================
+# VALIDASI INPUT
+# =========================
+def validate_input(text):
+    """
+    Melakukan validasi input pengguna sebelum diproses oleh GPT.
+    """
+
+    text = text.strip()
+
+    # Validasi pesan kosong
+    if not text:
+        return False, "Pesan tidak boleh kosong."
+
+    # Validasi panjang minimal
+    if len(text) < 5:
+        return False, "Pesan terlalu pendek. Silakan jelaskan permasalahan Anda."
+
+    # Validasi domain akademik
+    if not is_academic_topic(text):
+        return False, (
+            "Maaf, aplikasi ini hanya melayani permasalahan akademik mahasiswa. "
+            "Silakan sampaikan pertanyaan atau curahan hati yang berkaitan dengan kegiatan akademik."
+        )
+
+    return True, ""
+
+# =========================
+# VALIDASI OUTPUT
+# =========================
+def validate_output(text):
+
+    # 1. Respons kosong
+    if not text or not text.strip():
+        return (
+            "Maaf, saya tidak dapat memberikan respons saat ini. "
+            "Silakan coba beberapa saat lagi."
+        )
+
+    text_lower = text.lower()
+
+    # 2. Kata yang tidak diperbolehkan
+    blocked_keywords = [
+        "investasi",
+        "saham",
+        "crypto",
+        "bitcoin",
+        "judi",
+        "slot",
+        "casino",
+        "pinjaman online",
+        "pinjol",
+        "diagnosis medis"
+    ]
+
+    for keyword in blocked_keywords:
+        if keyword in text_lower:
+            return (
+                "Maaf, saya hanya dapat membantu permasalahan akademik mahasiswa."
+            )
+
+    # 3. Respons terlalu pendek
+    if len(text.strip()) < 20:
+        return (
+            "Maaf, saya tidak dapat menghasilkan respons yang memadai. "
+            "Silakan jelaskan kembali permasalahan akademik Anda."
+        )
+
+    return text
 
 # =========================
 # HOME
@@ -233,6 +370,16 @@ def chat():
             }), 400
 
         # =========================
+        # INPUT RULE-BASED VALIDATION
+        # =========================
+        is_valid, message = validate_input(pesan)
+
+        if not is_valid:
+            return jsonify({
+                "respon_gpt": message
+            }), 200
+
+        # =========================
         # AMBIL 20 RIWAYAT CHAT TERAKHIR
         # =========================
         history = supabase.table("chats") \
@@ -275,25 +422,6 @@ def chat():
         # PESAN TERBARU USER
         # =========================
         messages.append({
-        "role": "system",
-         "content": """
-        Sebelum menjawab:
-
-        1. Pahami konteks pengguna.
-        2. Tentukan apakah pengguna mengalami:
-        - Burnout akademik
-        - Stres akademik
-        - Kesulitan manajemen waktu
-        - Kesulitan skripsi
-        - Kecemasan ujian
-        - Kehilangan motivasi
-        3. Sesuaikan gaya bahasa dengan kondisi pengguna.
-        4. Jangan memberikan diagnosis medis.
-        5. Jika informasi dari pengguna belum cukup, ajukan satu pertanyaan klarifikasi sebelum memberikan solusi.
-        """
-        })
-
-        messages.append({
             "role": "user",
             "content": pesan
         })
@@ -311,6 +439,10 @@ def chat():
         )
 
         hasil = response.choices[0].message.content
+        # =========================
+        # OUTPUT RULE-BASED VALIDATION
+        # =========================
+        hasil = validate_output(hasil)
         usage = response.usage
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
