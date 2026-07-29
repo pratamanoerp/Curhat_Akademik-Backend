@@ -369,15 +369,6 @@ def chat():
                 "message": "user_id dan pesan wajib diisi."
             }), 400
 
-        # =========================
-        # INPUT RULE-BASED VALIDATION
-        # =========================
-        is_valid, message = validate_input(pesan)
-
-        if not is_valid:
-            return jsonify({
-                "respon_gpt": message
-            }), 200
 
         # =========================
         # AMBIL 20 RIWAYAT CHAT TERAKHIR
@@ -391,6 +382,19 @@ def chat():
 
          # Balik lagi supaya urut dari lama ke baru
         history_data = list(reversed(history.data))
+
+        # =========================
+        # INPUT RULE-BASED VALIDATION
+        # Hanya dilakukan pada pesan pertama
+        # =========================
+        if len(history_data) == 0:
+
+            is_valid, message = validate_input(pesan)
+
+            if not is_valid:
+                return jsonify({
+                    "respon_gpt": message
+                }), 200
 
         # =========================
         # SUSUN MESSAGES
