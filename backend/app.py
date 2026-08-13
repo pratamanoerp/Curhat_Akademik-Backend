@@ -512,6 +512,12 @@ def save_chat():
         "pesan_user": pesan_user_encrypted,
         "respon_gpt": respon_gpt
     }).execute()
+    print("=== DEBUG SAVE CHAT ===")
+    print("USER ID:", user_id)
+    print("SESSION ID:", session_id)
+    print("PESAN ENCRYPTED:", pesan_user_encrypted)
+    print("SUPABASE DATA:", response.data)
+    print("=======================")
     # =========================
     # UPDATE JUDUL CHAT
     # =========================
