@@ -7,6 +7,7 @@ from flask_cors import CORS
 from supabase import create_client
 from openai import OpenAI
 from werkzeug.security import generate_password_hash, check_password_hash
+from cryptography.fernet import Fernet
 
 app = Flask(__name__)
 CORS(app)
@@ -29,6 +30,22 @@ client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
     timeout=60
 )
+
+# =========================
+# ENKRIPSI CHAT
+# =========================
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY")
+
+if not ENCRYPTION_KEY:
+    raise ValueError("ENCRYPTION_KEY belum diatur di file .env")
+
+cipher = Fernet(ENCRYPTION_KEY.encode())
+
+def encrypt_text(text):
+    return cipher.encrypt(text.encode()).decode()
+
+def decrypt_text(text):
+    return cipher.decrypt(text.encode()).decode()
 
 SYSTEM_PROMPT = """
 Kamu adalah Curhat Akademik AI, sebuah AI Assistant yang dirancang khusus
@@ -405,15 +422,21 @@ def chat():
                 "content": SYSTEM_PROMPT
             }
         ]
-        
+
         # =========================
         # MASUKKAN RIWAYAT CHAT
         # =========================
         for item in history_data:
 
+            try:
+                pesan_lama = decrypt_text(item["pesan_user"])
+            except Exception:
+                # Untuk data lama yang belum terenkripsi
+                pesan_lama = item["pesan_user"]
+
             messages.append({
                 "role": "user",
-                "content": item["pesan_user"]
+                "content": pesan_lama
             })
 
             if item["respon_gpt"]:
@@ -441,11 +464,7 @@ def chat():
             presence_penalty=0.3,
             frequency_penalty=0.2,
         )
-
         hasil = response.choices[0].message.content
-        # =========================
-        # OUTPUT RULE-BASED VALIDATION
-        # =========================
         hasil = validate_output(hasil)
         usage = response.usage
         prompt_tokens = usage.prompt_tokens if usage else 0
@@ -485,10 +504,12 @@ def save_chat():
             "message": "user_id dan pesan_user wajib diisi."
         }), 400
 
+    pesan_user_encrypted = encrypt_text(pesan_user)
+
     response = supabase.table("chats").insert({
         "user_id": user_id,
         "session_id": session_id,
-        "pesan_user": pesan_user,
+        "pesan_user": pesan_user_encrypted,
         "respon_gpt": respon_gpt
     }).execute()
     # =========================
@@ -545,12 +566,17 @@ def get_chat_sessions(user_id):
 def get_chat(session_id):
 
     response = supabase.table("chats") \
-        .select("*") \
-        .eq("session_id", session_id) \
-        .order("created_at") \
-        .execute()
+    .select("*") \
+    .eq("session_id", session_id) \
+    .order("created_at") \
+    .execute()
 
-    return jsonify(response.data)
+    data = response.data
+
+    for item in data:
+        item["pesan_user"] = decrypt_text(item["pesan_user"])
+
+    return jsonify(data)
 
 # =========================
 # RUN APP
