@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
-
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -46,6 +47,45 @@ def encrypt_text(text):
 
 def decrypt_text(text):
     return cipher.decrypt(text.encode()).decode()
+
+# =========================
+# LIMIT CHAT HARIAN
+# =========================
+DAILY_CHAT_LIMIT = 2
+
+
+def get_today_chat_count(user_id):
+
+    jakarta = ZoneInfo("Asia/Jakarta")
+    now_jakarta = datetime.now(jakarta)
+
+    start_jakarta = now_jakarta.replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0
+    )
+
+    end_jakarta = now_jakarta.replace(
+        hour=23,
+        minute=59,
+        second=59,
+        microsecond=999999
+    )
+
+    start_utc = start_jakarta.astimezone(timezone.utc)
+    end_utc = end_jakarta.astimezone(timezone.utc)
+
+    response = (
+        supabase.table("chats")
+        .select("id", count="exact")
+        .eq("user_id", user_id)
+        .gte("created_at", start_utc.isoformat())
+        .lte("created_at", end_utc.isoformat())
+        .execute()
+    )
+
+    return response.count or 0
 
 SYSTEM_PROMPT = """
 Kamu adalah Curhat Akademik AI, sebuah AI Assistant yang dirancang khusus
@@ -386,6 +426,17 @@ def chat():
                 "message": "user_id dan pesan wajib diisi."
             }), 400
 
+        # =========================
+        # CEK LIMIT CHAT HARIAN
+        # =========================
+        chat_count = get_today_chat_count(user_id)
+
+        if chat_count >= DAILY_CHAT_LIMIT:
+            return jsonify({
+                "message": "Batas chat AI harian telah tercapai.",
+                "limit": DAILY_CHAT_LIMIT,
+                "used": chat_count
+            }), 429
 
         # =========================
         # AMBIL 20 RIWAYAT CHAT TERAKHIR
