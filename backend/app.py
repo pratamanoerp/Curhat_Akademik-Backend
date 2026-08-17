@@ -507,14 +507,31 @@ def chat():
         # =========================
         # REQUEST KE OPENAI
         # =========================
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.6,
-            max_tokens=700,
-            presence_penalty=0.3,
-            frequency_penalty=0.2,
-        )
+        try:
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=0.6,
+                max_tokens=700,
+                presence_penalty=0.3,
+                frequency_penalty=0.2,
+            )
+
+        except Exception as e:
+
+            print("=== OPENAI ERROR ===")
+            print(str(e))
+            print("====================")
+
+            return jsonify({
+                "maintenance": True,
+                "message": (
+                    "Sistem AI sedang mengalami gangguan sementara. "
+                    "Silakan coba kembali beberapa saat lagi."
+                )
+            }), 503
+
         hasil = response.choices[0].message.content
         hasil = validate_output(hasil)
         usage = response.usage
