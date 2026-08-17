@@ -51,7 +51,7 @@ def decrypt_text(text):
 # =========================
 # LIMIT CHAT HARIAN
 # =========================
-DAILY_CHAT_LIMIT = 2
+DAILY_CHAT_LIMIT = 20
 
 
 def get_today_chat_count(user_id):
