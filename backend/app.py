@@ -91,7 +91,7 @@ def search_academic_data(pesan):
     text = pesan.lower().strip()
 
     # =========================
-    # KEYWORD AKADEMIK LOKAL
+    # KEYWORD AKADEMIK
     # =========================
     keyword_map = {
         "uts": [
@@ -165,6 +165,7 @@ def search_academic_data(pesan):
             "entry nilai",
             "input nilai",
             "masukkan nilai",
+            "masukkan nilai",
             "nilai"
         ]
     }
@@ -180,7 +181,13 @@ def search_academic_data(pesan):
                 kategori_ditemukan.append(kategori)
                 break
 
+    print("=== ACADEMIC SEARCH ===")
+    print("Pesan:", pesan)
+    print("Kategori:", kategori_ditemukan)
+
     if not kategori_ditemukan:
+        print("Kategori tidak ditemukan")
+        print("======================")
         return None
 
     # =========================
@@ -188,20 +195,13 @@ def search_academic_data(pesan):
     # =========================
     semester_filter = None
 
-    if any(kata in text for kata in [
-        "ganjil",
-        "gasal",
-        "semester 1",
-        "semester satu"
-    ]):
+    if "ganjil" in text:
         semester_filter = "Ganjil"
 
-    elif any(kata in text for kata in [
-        "genap",
-        "semester 2",
-        "semester dua"
-    ]):
+    elif "genap" in text:
         semester_filter = "Genap"
+
+    print("Semester:", semester_filter)
 
     # =========================
     # AMBIL DATA
@@ -215,15 +215,20 @@ def search_academic_data(pesan):
 
     data = response.data or []
 
+    print("Total data:", len(data))
+
     # =========================
     # FILTER SEMESTER
     # =========================
     if semester_filter:
         data = [
-            item for item in data
+            item
+            for item in data
             if str(item.get("semester", "")).strip().lower()
             == semester_filter.lower()
         ]
+
+    print("Data setelah filter semester:", len(data))
 
     # =========================
     # CARI DATA RELEVAN
@@ -234,131 +239,96 @@ def search_academic_data(pesan):
 
         kegiatan = str(
             item.get("kegiatan", "")
-        ).lower().strip()
+        ).strip().lower()
 
-        # =========================
+        cocok = False
+
         # UTS
-        # =========================
         if "uts" in kategori_ditemukan:
-
             if (
-                "uts" in kegiatan
-                or "ujian tengah semester" in kegiatan
-                or "ujian tengah" in kegiatan
+                "ujian tengah semester" in kegiatan
+                or "(uts)" in kegiatan
+                or "uts" in kegiatan
             ):
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # UAS
-        # =========================
         if "uas" in kategori_ditemukan:
-
             if (
-                "uas" in kegiatan
-                or "ujian akhir semester" in kegiatan
-                or "ujian akhir" in kegiatan
+                "ujian akhir semester" in kegiatan
+                or "(uas)" in kegiatan
+                or "uas" in kegiatan
             ):
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # KRS
-        # =========================
         if "krs" in kategori_ditemukan:
-
             if "krs" in kegiatan:
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # KULIAH
-        # =========================
         if "kuliah" in kategori_ditemukan:
-
             if (
-                "kuliah" in kegiatan
-                or "perkuliahan" in kegiatan
+                "perkuliahan" in kegiatan
+                or "kuliah" in kegiatan
             ):
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # REGISTRASI
-        # =========================
         if "registrasi" in kategori_ditemukan:
+            if "registrasi" in kegiatan:
+                cocok = True
 
-            if (
-                "registrasi" in kegiatan
-                or "her registrasi" in kegiatan
-                or "daftar ulang" in kegiatan
-            ):
-                hasil.append(item)
-                continue
-
-        # =========================
         # CUTI
-        # =========================
         if "cuti" in kategori_ditemukan:
+            if "cuti akademik" in kegiatan:
+                cocok = True
 
-            if "cuti" in kegiatan:
-                hasil.append(item)
-                continue
-
-        # =========================
         # SEMINAR
-        # =========================
         if "seminar" in kategori_ditemukan:
-
             if "seminar" in kegiatan:
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # SIDANG
-        # =========================
         if "sidang" in kategori_ditemukan:
-
             if (
                 "sidang" in kegiatan
                 or "yudisium" in kegiatan
             ):
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # SKRIPSI
-        # =========================
         if "skripsi" in kategori_ditemukan:
-
             if (
                 "skripsi" in kegiatan
                 or "yudisium" in kegiatan
             ):
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # WISUDA
-        # =========================
         if "wisuda" in kategori_ditemukan:
-
             if "wisuda" in kegiatan:
-                hasil.append(item)
-                continue
+                cocok = True
 
-        # =========================
         # NILAI
-        # =========================
         if "nilai" in kategori_ditemukan:
+            if "nilai" in kegiatan:
+                cocok = True
 
-            if (
-                "nilai" in kegiatan
-                or "entry nilai" in kegiatan
-                or "input nilai" in kegiatan
-            ):
-                hasil.append(item)
-                continue
+        if cocok:
+            hasil.append(item)
+
+    print("Hasil ditemukan:", len(hasil))
+
+    for item in hasil:
+        print(
+            "FOUND:",
+            item.get("id"),
+            item.get("semester"),
+            item.get("kegiatan")
+        )
+
+    print("======================")
 
     if not hasil:
         return None
