@@ -922,6 +922,23 @@ def get_chat(session_id):
 
     return jsonify(data)
 
+@app.route('/test-academic', methods=['GET'])
+def test_academic():
+
+    try:
+        data = search_academic_data("kapan UTS semester ganjil?")
+
+        return jsonify({
+            "success": True,
+            "hasil": data
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 # =========================
 # RUN APP
 # =========================
