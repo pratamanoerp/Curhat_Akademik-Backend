@@ -926,14 +926,23 @@ def get_chat(session_id):
 def test_academic():
 
     try:
-        data = search_academic_data("kapan UTS semester ganjil?")
+        response = (
+            supabase.table("academic_data")
+            .select("*")
+            .eq("tahun_akademik", "2026/2027")
+            .execute()
+        )
+
+        data = response.data or []
 
         return jsonify({
             "success": True,
-            "hasil": data
+            "jumlah_data": len(data),
+            "data": data[:5]
         })
 
     except Exception as e:
+
         return jsonify({
             "success": False,
             "error": str(e)
