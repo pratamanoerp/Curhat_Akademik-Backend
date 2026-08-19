@@ -87,6 +87,223 @@ def get_today_chat_count(user_id):
 
     return response.count or 0
 
+def search_academic_data(pesan):
+    text = pesan.lower().strip()
+
+    # =========================
+    # KEYWORD AKADEMIK LOKAL
+    # =========================
+    keyword_map = {
+        "uts": [
+            "uts",
+            "ujian tengah semester",
+            "ujian tengah",
+            "ujian pertengahan semester",
+            "ujian pertengahan",
+            "tengah semester"
+        ],
+
+        "uas": [
+            "uas",
+            "ujian akhir semester",
+            "ujian akhir",
+            "akhir semester"
+        ],
+
+        "krs": [
+            "krs",
+            "pengisian krs",
+            "isi krs",
+            "mengisi krs",
+            "ambil krs"
+        ],
+
+        "kuliah": [
+            "kuliah",
+            "perkuliahan",
+            "masuk kuliah",
+            "mulai kuliah",
+            "perkuliahan dimulai"
+        ],
+
+        "registrasi": [
+            "registrasi",
+            "her registrasi",
+            "daftar ulang",
+            "registrasi ulang"
+        ],
+
+        "cuti": [
+            "cuti",
+            "cuti akademik"
+        ],
+
+        "seminar": [
+            "seminar",
+            "seminar skripsi",
+            "seminar proposal"
+        ],
+
+        "sidang": [
+            "sidang",
+            "sidang skripsi",
+            "ujian skripsi",
+            "yudisium"
+        ],
+
+        "skripsi": [
+            "skripsi",
+            "yudisium"
+        ],
+
+        "wisuda": [
+            "wisuda",
+            "acara wisuda"
+        ],
+
+        "nilai": [
+            "entry nilai",
+            "input nilai",
+            "masukkan nilai",
+            "nilai"
+        ]
+    }
+
+    # =========================
+    # DETEKSI KATEGORI
+    # =========================
+    kategori_ditemukan = []
+
+    for kategori, keywords in keyword_map.items():
+
+        for keyword in keywords:
+
+            if keyword in text:
+                kategori_ditemukan.append(kategori)
+                break
+
+    # Tidak ada kategori yang cocok
+    if not kategori_ditemukan:
+        return None
+
+    # =========================
+    # DETEKSI SEMESTER
+    # =========================
+    semester_filter = None
+
+    if "ganjil" in text:
+        semester_filter = "Ganjil"
+
+    elif "genap" in text:
+        semester_filter = "Genap"
+
+    # =========================
+    # AMBIL DATA DARI SUPABASE
+    # =========================
+    response = (
+        supabase.table("academic_data")
+        .select("*")
+        .eq("tahun_akademik", "2026/2027")
+        .execute()
+    )
+
+    data = response.data or []
+
+    # =========================
+    # FILTER SEMESTER
+    # =========================
+    if semester_filter:
+
+        data = [
+            item
+            for item in data
+            if item["semester"] == semester_filter
+        ]
+
+    # =========================
+    # CARI DATA YANG RELEVAN
+    # =========================
+    hasil = []
+
+    for item in data:
+
+        kegiatan = item["kegiatan"].lower()
+
+        cocok = False
+
+        # UTS
+        if "uts" in kategori_ditemukan:
+            if "ujian tengah semester" in kegiatan:
+                cocok = True
+
+        # UAS
+        if "uas" in kategori_ditemukan:
+            if "ujian akhir semester" in kegiatan:
+                cocok = True
+
+        # KRS
+        if "krs" in kategori_ditemukan:
+            if "krs" in kegiatan:
+                cocok = True
+
+        # KULIAH
+        if "kuliah" in kategori_ditemukan:
+            if "perkuliahan" in kegiatan:
+                cocok = True
+
+        # REGISTRASI
+        if "registrasi" in kategori_ditemukan:
+            if (
+                "registrasi" in kegiatan
+                or "her registrasi" in kegiatan
+            ):
+                cocok = True
+
+        # CUTI
+        if "cuti" in kategori_ditemukan:
+            if "cuti akademik" in kegiatan:
+                cocok = True
+
+        # SEMINAR
+        if "seminar" in kategori_ditemukan:
+            if "seminar" in kegiatan:
+                cocok = True
+
+        # SIDANG
+        if "sidang" in kategori_ditemukan:
+            if (
+                "sidang" in kegiatan
+                or "yudisium" in kegiatan
+            ):
+                cocok = True
+
+        # SKRIPSI
+        if "skripsi" in kategori_ditemukan:
+            if (
+                "skripsi" in kegiatan
+                or "yudisium" in kegiatan
+            ):
+                cocok = True
+
+        # WISUDA
+        if "wisuda" in kategori_ditemukan:
+            if "wisuda" in kegiatan:
+                cocok = True
+
+        # NILAI
+        if "nilai" in kategori_ditemukan:
+            if "nilai" in kegiatan:
+                cocok = True
+
+        if cocok:
+            hasil.append(item)
+
+    # Tidak ada data yang cocok
+    if not hasil:
+        return None
+
+    return hasil
+
 SYSTEM_PROMPT = """
 Kamu adalah Curhat Akademik AI, sebuah AI Assistant yang dirancang khusus
 untuk membantu mahasiswa Indonesia dalam menghadapi berbagai permasalahan akademik.
@@ -427,18 +644,6 @@ def chat():
             }), 400
 
         # =========================
-        # CEK LIMIT CHAT HARIAN
-        # =========================
-        chat_count = get_today_chat_count(user_id)
-
-        if chat_count >= DAILY_CHAT_LIMIT:
-            return jsonify({
-                "message": "Batas chat AI harian telah tercapai.",
-                "limit": DAILY_CHAT_LIMIT,
-                "used": chat_count
-            }), 429
-
-        # =========================
         # AMBIL 20 RIWAYAT CHAT TERAKHIR
         # =========================
         history = supabase.table("chats") \
@@ -463,6 +668,40 @@ def chat():
                 return jsonify({
                     "respon_gpt": message
                 }), 200
+        # =========================
+        # CEK DATABASE LOKAL DULU
+        # =========================
+        local_data = search_academic_data(pesan)
+
+        if local_data:
+
+            jawaban = "📚 **Informasi Akademik Fakultas Teknik**\n\n"
+
+            for item in local_data:
+                jawaban += f"**{item['kegiatan']}**\n"
+                jawaban += f"📅 {item['tanggal']}\n\n"
+
+            jawaban += (
+                "_Sumber: Kalender Akademik UNIS Tahun Akademik "
+                "2026/2027_"
+            )
+
+            return jsonify({
+                "respon_gpt": jawaban,
+                "source": "database"
+            })
+
+        # =========================
+        # CEK LIMIT CHAT HARIAN
+        # =========================
+        chat_count = get_today_chat_count(user_id)
+
+        if chat_count >= DAILY_CHAT_LIMIT:
+            return jsonify({
+                "message": "Batas chat AI harian telah tercapai.",
+                "limit": DAILY_CHAT_LIMIT,
+                "used": chat_count
+            }), 429
 
         # =========================
         # SUSUN MESSAGES
