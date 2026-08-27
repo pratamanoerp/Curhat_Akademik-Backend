@@ -90,24 +90,100 @@ def get_today_chat_count(user_id):
 def search_academic_data(pesan):
     text = pesan.lower().strip()
 
-    # =========================
-    # KEYWORD AKADEMIK
-    # =========================
+    # =====================================================
+    # 1. CEK UNIVERSITAS / KAMPUS LAIN
+    # Database ini khusus Fakultas Teknik UNIS
+    # =====================================================
+
+    universitas_lain = [
+        "umt",
+        "universitas muhammadiyah tangerang",
+        "universitas lain",
+        "kampus lain"
+    ]
+
+    for kampus in universitas_lain:
+        if kampus in text:
+            return {
+                "type": "blocked",
+                "message": (
+                    "Maaf, saya hanya menyediakan informasi akademik "
+                    "untuk Fakultas Teknik Universitas Islam Syekh-Yusuf Tangerang."
+                )
+            }
+
+    # =====================================================
+    # 2. DETEKSI UAS DAN UTS
+    # =====================================================
+
+    is_uas = any(keyword in text for keyword in [
+        "uas",
+        "ujian akhir semester",
+        "ujian akhir"
+    ])
+
+    is_uts = any(keyword in text for keyword in [
+        "uts",
+        "ujian tengah semester",
+        "ujian tengah"
+    ])
+
+    # =====================================================
+    # 3. DETEKSI PERMINTAAN JADWAL / TANGGAL
+    # =====================================================
+
+    meminta_jadwal = any(keyword in text for keyword in [
+        "kapan",
+        "tanggal",
+        "jadwal",
+        "dilaksanakan",
+        "pelaksanaan",
+        "hari"
+    ])
+
+    # =====================================================
+    # 4. UAS / UTS TANPA PERMINTAAN JADWAL
+    # Hanya berikan penjelasan umum
+    # =====================================================
+
+    if (is_uas or is_uts) and not meminta_jadwal:
+
+        if is_uas:
+            return {
+                "type": "general",
+                "message": (
+                    "UAS adalah Ujian Akhir Semester yang dilaksanakan "
+                    "untuk mengevaluasi hasil pembelajaran mahasiswa "
+                    "pada akhir semester."
+                )
+            }
+
+        if is_uts:
+            return {
+                "type": "general",
+                "message": (
+                    "UTS adalah Ujian Tengah Semester yang dilaksanakan "
+                    "untuk mengevaluasi hasil pembelajaran mahasiswa "
+                    "pada pertengahan semester."
+                )
+            }
+
+    # =====================================================
+    # 5. KEYWORD AKADEMIK LOKAL
+    # =====================================================
+
     keyword_map = {
-        "uts": [
-            "uts",
-            "ujian tengah semester",
-            "ujian tengah",
-            "ujian pertengahan semester",
-            "ujian pertengahan",
-            "tengah semester"
-        ],
 
         "uas": [
             "uas",
             "ujian akhir semester",
-            "ujian akhir",
-            "akhir semester"
+            "ujian akhir"
+        ],
+
+        "uts": [
+            "uts",
+            "ujian tengah semester",
+            "ujian tengah"
         ],
 
         "krs": [
@@ -165,34 +241,32 @@ def search_academic_data(pesan):
             "entry nilai",
             "input nilai",
             "masukkan nilai",
-            "masukkan nilai",
             "nilai"
         ]
     }
 
-    # =========================
-    # DETEKSI KATEGORI
-    # =========================
+    # =====================================================
+    # 6. DETEKSI KATEGORI
+    # =====================================================
+
     kategori_ditemukan = []
 
     for kategori, keywords in keyword_map.items():
+
         for keyword in keywords:
+
             if keyword in text:
                 kategori_ditemukan.append(kategori)
                 break
 
-    print("=== ACADEMIC SEARCH ===")
-    print("Pesan:", pesan)
-    print("Kategori:", kategori_ditemukan)
-
+    # Tidak ada kategori yang cocok
     if not kategori_ditemukan:
-        print("Kategori tidak ditemukan")
-        print("======================")
         return None
 
-    # =========================
-    # DETEKSI SEMESTER
-    # =========================
+    # =====================================================
+    # 7. DETEKSI SEMESTER
+    # =====================================================
+
     semester_filter = None
 
     if "ganjil" in text:
@@ -201,11 +275,10 @@ def search_academic_data(pesan):
     elif "genap" in text:
         semester_filter = "Genap"
 
-    print("Semester:", semester_filter)
+    # =====================================================
+    # 8. AMBIL DATA DARI DATABASE
+    # =====================================================
 
-    # =========================
-    # AMBIL DATA
-    # =========================
     response = (
         supabase.table("academic_data")
         .select("*")
@@ -215,125 +288,154 @@ def search_academic_data(pesan):
 
     data = response.data or []
 
-    print("Total data:", len(data))
+    # =====================================================
+    # 9. FILTER SEMESTER
+    # =====================================================
 
-    # =========================
-    # FILTER SEMESTER
-    # =========================
     if semester_filter:
+
         data = [
             item
             for item in data
-            if str(item.get("semester", "")).strip().lower()
-            == semester_filter.lower()
+            if item["semester"] == semester_filter
         ]
 
-    print("Data setelah filter semester:", len(data))
+    # =====================================================
+    # 10. CARI DATA YANG RELEVAN
+    # =====================================================
 
-    # =========================
-    # CARI DATA RELEVAN
-    # =========================
     hasil = []
 
     for item in data:
 
-        kegiatan = str(
-            item.get("kegiatan", "")
-        ).strip().lower()
+        kegiatan = item["kegiatan"].lower()
 
         cocok = False
 
-        # UTS
-        if "uts" in kategori_ditemukan:
-            if (
-                "ujian tengah semester" in kegiatan
-                or "(uts)" in kegiatan
-                or "uts" in kegiatan
-            ):
-                cocok = True
-
+        # -------------------------
         # UAS
+        # -------------------------
+
         if "uas" in kategori_ditemukan:
-            if (
-                "ujian akhir semester" in kegiatan
-                or "(uas)" in kegiatan
-                or "uas" in kegiatan
-            ):
+
+            if "ujian akhir semester" in kegiatan:
                 cocok = True
 
+        # -------------------------
+        # UTS
+        # -------------------------
+
+        if "uts" in kategori_ditemukan:
+
+            if "ujian tengah semester" in kegiatan:
+                cocok = True
+
+        # -------------------------
         # KRS
+        # -------------------------
+
         if "krs" in kategori_ditemukan:
+
             if "krs" in kegiatan:
                 cocok = True
 
+        # -------------------------
         # KULIAH
+        # -------------------------
+
         if "kuliah" in kategori_ditemukan:
-            if (
-                "perkuliahan" in kegiatan
-                or "kuliah" in kegiatan
-            ):
+
+            if "perkuliahan" in kegiatan:
                 cocok = True
 
+        # -------------------------
         # REGISTRASI
+        # -------------------------
+
         if "registrasi" in kategori_ditemukan:
+
             if "registrasi" in kegiatan:
                 cocok = True
 
+        # -------------------------
         # CUTI
+        # -------------------------
+
         if "cuti" in kategori_ditemukan:
+
             if "cuti akademik" in kegiatan:
                 cocok = True
 
+        # -------------------------
         # SEMINAR
+        # -------------------------
+
         if "seminar" in kategori_ditemukan:
+
             if "seminar" in kegiatan:
                 cocok = True
 
+        # -------------------------
         # SIDANG
+        # -------------------------
+
         if "sidang" in kategori_ditemukan:
+
             if (
                 "sidang" in kegiatan
                 or "yudisium" in kegiatan
             ):
                 cocok = True
 
+        # -------------------------
         # SKRIPSI
+        # -------------------------
+
         if "skripsi" in kategori_ditemukan:
+
             if (
                 "skripsi" in kegiatan
                 or "yudisium" in kegiatan
             ):
                 cocok = True
 
+        # -------------------------
         # WISUDA
+        # -------------------------
+
         if "wisuda" in kategori_ditemukan:
+
             if "wisuda" in kegiatan:
                 cocok = True
 
+        # -------------------------
         # NILAI
+        # -------------------------
+
         if "nilai" in kategori_ditemukan:
+
             if "nilai" in kegiatan:
                 cocok = True
 
+        # Masukkan hasil
         if cocok:
             hasil.append(item)
 
-    print("Hasil ditemukan:", len(hasil))
-
-    for item in hasil:
-        print(
-            "FOUND:",
-            item.get("id"),
-            item.get("semester"),
-            item.get("kegiatan")
-        )
-
-    print("======================")
+    # =====================================================
+    # 11. JIKA TIDAK ADA DATA
+    # =====================================================
 
     if not hasil:
         return None
 
-    return hasil
+    # =====================================================
+    # 12. KEMBALIKAN DATA DATABASE
+    # =====================================================
+
+    return {
+        "type": "database",
+        "data": hasil
+    }
 
 SYSTEM_PROMPT = """
 Kamu adalah Curhat Akademik AI, sebuah AI Assistant yang dirancang khusus
@@ -700,27 +802,53 @@ def chat():
                     "respon_gpt": message
                 }), 200
         # =========================
-        # CEK DATABASE LOKAL DULU
+        # CEK DATABASE LOKAL
         # =========================
         local_data = search_academic_data(pesan)
 
         if local_data:
 
-            jawaban = "📚 **Informasi Akademik Fakultas Teknik**\n\n"
+            # =========================
+            # UNIVERSITAS LAIN
+            # =========================
+            if local_data["type"] == "blocked":
 
-            for item in local_data:
-                jawaban += f"**{item['kegiatan']}**\n"
-                jawaban += f"📅 {item['tanggal']}\n\n"
+                return jsonify({
+                    "respon_gpt": local_data["message"],
+                    "source": "validation"
+                })
 
-            jawaban += (
-                "_Sumber: Kalender Akademik UNIS Tahun Akademik "
-                "2026/2027_"
-            )
+            # =========================
+            # UAS / UTS UMUM
+            # =========================
+            if local_data["type"] == "general":
 
-            return jsonify({
-                "respon_gpt": jawaban,
-                "source": "database"
-            })
+                return jsonify({
+                    "respon_gpt": local_data["message"],
+                    "source": "local"
+                })
+
+            # =========================
+            # DATA DARI DATABASE
+            # =========================
+            if local_data["type"] == "database":
+
+                jawaban = "📚 **Informasi Akademik Fakultas Teknik UNIS**\n\n"
+
+                for item in local_data["data"]:
+
+                    jawaban += f"**{item['kegiatan']}**\n"
+                    jawaban += f"📅 {item['tanggal']}\n\n"
+
+                jawaban += (
+                    "_Sumber: Kalender Akademik UNIS "
+                    "Tahun Akademik 2026/2027_"
+                )
+
+                return jsonify({
+                    "respon_gpt": jawaban,
+                    "source": "database"
+                })
 
         # =========================
         # CEK LIMIT CHAT HARIAN
