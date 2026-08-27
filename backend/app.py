@@ -997,46 +997,17 @@ def new_chat():
 
 def check_academic_context(pesan):
     """
-    Mengecek konteks institusi pada pertanyaan akademik.
+    Mengecek apakah pertanyaan akademik berkaitan dengan
+    Fakultas Teknik Universitas Islam Syekh-Yusuf Tangerang (UNIS)
+    atau institusi lain.
 
     Return:
-    - "unis"    = merujuk ke UNIS
-    - "other"   = merujuk ke institusi lain
-    - "unknown" = tidak menyebut institusi
+    - "unis"    = berkaitan dengan UNIS
+    - "other"   = berkaitan dengan institusi lain
+    - "unknown" = tidak menyebut/menentukan institusi
     """
 
     text = pesan.lower().strip()
-
-    # Jika tidak ada indikasi penyebutan institusi,
-    # anggap konteksnya adalah aplikasi UNIS.
-    institution_indicators = [
-        "universitas",
-        "kampus",
-        "institut",
-        "politeknik",
-        "sekolah tinggi",
-        "umt",
-        "unis",
-        "raharja"
-    ]
-
-    menyebut_institusi = any(
-        keyword in text
-        for keyword in institution_indicators
-    )
-
-    # Pertanyaan seperti:
-    # "Kapan UAS?"
-    # "Kapan KRS?"
-    # tidak perlu classifier GPT.
-    if not menyebut_institusi:
-        return "unknown"
-
-    # =====================================================
-    # CLASSIFIER GPT
-    # Hanya untuk menentukan konteks institusi.
-    # BUKAN untuk menjawab pertanyaan user.
-    # =====================================================
 
     try:
 
@@ -1049,19 +1020,46 @@ def check_academic_context(pesan):
 Anda adalah classifier konteks institusi akademik.
 
 Sistem ini KHUSUS untuk:
-Universitas Islam Syekh-Yusuf Tangerang (UNIS),
-Fakultas Teknik.
+Fakultas Teknik Universitas Islam Syekh-Yusuf Tangerang (UNIS).
 
-Tugas Anda hanya menentukan konteks institusi dari pertanyaan pengguna.
+Tugas Anda hanya menentukan apakah pertanyaan pengguna
+berkaitan dengan UNIS atau institusi lain.
 
-Aturan:
-- Jika pertanyaan merujuk kepada Universitas Islam Syekh-Yusuf Tangerang atau UNIS, jawab: UNIS
-- Jika pertanyaan merujuk kepada universitas, kampus, fakultas, atau institusi lain, jawab: OTHER
-- Jika tidak ada institusi yang disebutkan, jawab: UNKNOWN
+ATURAN:
+
+1. Jawab "UNIS" jika:
+   - pengguna menyebut UNIS;
+   - pengguna menyebut Universitas Islam Syekh-Yusuf Tangerang;
+   - pengguna menyebut Universitas Islam Syekh-Yusuf;
+   - pengguna bertanya tentang Fakultas Teknik tanpa menyebut
+     institusi lain, karena sistem ini khusus Fakultas Teknik UNIS;
+   - pengguna bertanya tentang informasi akademik tanpa menyebut
+     institusi lain dan konteksnya sesuai dengan sistem UNIS.
+
+2. Jawab "OTHER" jika:
+   - pengguna menyebut universitas lain;
+   - pengguna menyebut kampus lain;
+   - pengguna menyebut fakultas di universitas lain;
+   - pengguna meminta informasi akademik untuk institusi selain UNIS.
+
+   Contoh:
+   "Kapan UAS Fakultas Teknik Universitas Indonesia?"
+   → OTHER
+
+   "Kapan UAS Fakultas Teknik UMT?"
+   → OTHER
+
+   "Kapan KRS Fakultas Teknik Raharja?"
+   → OTHER
+
+3. Jawab "UNKNOWN" hanya jika konteks institusi benar-benar
+   tidak dapat ditentukan.
 
 Jangan menjawab pertanyaan pengguna.
-Jangan memberikan penjelasan.
-Jawab hanya salah satu:
+Jangan memberikan tanggal.
+Jangan memberikan informasi akademik.
+
+Jawab HANYA salah satu:
 UNIS
 OTHER
 UNKNOWN
@@ -1073,10 +1071,15 @@ UNKNOWN
                 }
             ],
             temperature=0,
-            max_tokens=5
+            max_tokens=3
         )
 
-        hasil = response.choices[0].message.content.strip().upper()
+        hasil = (
+            response.choices[0]
+            .message.content
+            .strip()
+            .upper()
+        )
 
         if hasil == "UNIS":
             return "unis"
@@ -1092,9 +1095,8 @@ UNKNOWN
         print(str(e))
         print("================================")
 
-        # Jika classifier gagal,
-        # jangan mengambil risiko memberikan data
-        # akademik UNIS kepada institusi lain.
+        # Jika classifier gagal, jangan mengambil risiko
+        # memberikan data akademik UNIS.
         return "other"
 
 # =========================
