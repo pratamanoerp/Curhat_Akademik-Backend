@@ -87,8 +87,8 @@ def get_today_chat_count(user_id):
 
     return response.count or 0
 
-def search_academic_data(pesan):
-    text = pesan.lower().strip()
+def search_academic_data(pesan, context_text=""):
+    text = f"{context_text} {pesan}".lower().strip()
 
     # =====================================================
     # 1. DETEKSI UAS DAN UTS
@@ -1165,6 +1165,33 @@ def chat():
                 "source": "validation"
             })
 
+        # =========================
+        # GABUNGKAN KONTEKS CHAT
+        # =========================
+
+        context_text = ""
+
+        for item in history_data[-4:]:
+
+            try:
+                pesan_lama = decrypt_text(item["pesan_user"])
+            except Exception:
+                pesan_lama = item["pesan_user"]
+
+            context_text += " " + pesan_lama
+
+        # Tambahkan pesan terbaru
+        context_text += " " + pesan
+
+        # =========================
+        # CEK DATABASE LOKAL
+        # =========================
+
+        local_data = search_academic_data(
+            pesan,
+            context_text
+        )
+        
         # Jika konteks UNIS atau tidak menyebut kampus,
         # baru periksa database lokal
         local_data = search_academic_data(pesan)
