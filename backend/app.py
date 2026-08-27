@@ -91,26 +91,61 @@ def search_academic_data(pesan):
     text = pesan.lower().strip()
 
     # =====================================================
-    # 1. CEK UNIVERSITAS / KAMPUS LAIN
-    # Database ini khusus Fakultas Teknik UNIS
+    # 1. VALIDASI UNIVERSITAS
+    # Sistem hanya untuk Fakultas Teknik UNIS
     # =====================================================
 
-    universitas_lain = [
-        "umt",
-        "universitas muhammadiyah tangerang",
-        "universitas lain",
-        "kampus lain"
+    university_keywords = [
+    "umt",
+    "universitas muhammadiyah tangerang",
+    "raharja",
+    "universitas raharja",
+    "untirta",
+    "universitas sultan ageng tirtayasa",
+    "trisakti",
+    "binus",
+    "mercu buana",
+    "mercubuana",
+    "paramadina",
+    "gunadarma",
+    "telkom",
+    "esa unggul",
+    "muhammadiyah"
     ]
 
-    for kampus in universitas_lain:
-        if kampus in text:
-            return {
-                "type": "blocked",
-                "message": (
-                    "Maaf, saya hanya menyediakan informasi akademik "
-                    "untuk Fakultas Teknik Universitas Islam Syekh-Yusuf Tangerang."
-                )
-            }
+    unis_keywords = [
+        "unis",
+        "universitas islam syekh-yusuf",
+        "universitas islam syekh yusuf",
+        "syekh-yusuf",
+        "syekh yusuf",
+        "fakultas teknik unis"
+    ]
+
+    # Jika pesan menyebut UNIS, berarti konteks sesuai
+    menyebut_unis = any(
+        keyword in text
+        for keyword in unis_keywords
+    )
+
+    # Cari apakah pesan menyebut universitas/kampus tertentu
+    menyebut_kampus = any(
+        keyword in text
+        for keyword in university_keywords
+    )
+
+    # Jika menyebut kampus tetapi bukan UNIS,
+    # jangan gunakan database UNIS
+    if menyebut_kampus and not menyebut_unis:
+
+        return {
+            "type": "blocked",
+            "message": (
+                "Maaf, sistem ini khusus menyediakan informasi "
+                "akademik Fakultas Teknik Universitas Islam "
+                "Syekh-Yusuf Tangerang (UNIS)."
+            )
+        }
 
     # =====================================================
     # 2. DETEKSI UAS DAN UTS
