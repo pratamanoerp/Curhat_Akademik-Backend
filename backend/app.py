@@ -91,62 +91,261 @@ def search_academic_data(pesan):
     text = pesan.lower().strip()
 
     # =====================================================
-    # 1. VALIDASI UNIVERSITAS
-    # Sistem hanya untuk Fakultas Teknik UNIS
+    # 1. DETEKSI UAS DAN UTS
     # =====================================================
 
-    university_keywords = [
-    "umt",
-    "universitas muhammadiyah tangerang",
-    "raharja",
-    "universitas raharja",
-    "untirta",
-    "universitas sultan ageng tirtayasa",
-    "trisakti",
-    "binus",
-    "mercu buana",
-    "mercubuana",
-    "paramadina",
-    "gunadarma",
-    "telkom",
-    "esa unggul",
-    "muhammadiyah"
-    ]
+    is_uas = any(keyword in text for keyword in [
+        "uas",
+        "ujian akhir semester",
+        "ujian akhir"
+    ])
 
-    unis_keywords = [
-        "unis",
-        "universitas islam syekh-yusuf",
-        "universitas islam syekh yusuf",
-        "syekh-yusuf",
-        "syekh yusuf",
-        "fakultas teknik unis"
-    ]
+    is_uts = any(keyword in text for keyword in [
+        "uts",
+        "ujian tengah semester",
+        "ujian tengah"
+    ])
 
-    # Jika pesan menyebut UNIS, berarti konteks sesuai
-    menyebut_unis = any(
-        keyword in text
-        for keyword in unis_keywords
+    # =====================================================
+    # 2. DETEKSI PERMINTAAN JADWAL / TANGGAL
+    # =====================================================
+
+    meminta_jadwal = any(keyword in text for keyword in [
+        "kapan",
+        "tanggal",
+        "jadwal",
+        "dilaksanakan",
+        "pelaksanaan",
+        "hari"
+    ])
+
+    # =====================================================
+    # 3. UAS / UTS TANPA PERMINTAAN JADWAL
+    # =====================================================
+
+    if (is_uas or is_uts) and not meminta_jadwal:
+
+        if is_uas:
+            return {
+                "type": "general",
+                "message": (
+                    "UAS adalah Ujian Akhir Semester yang dilaksanakan "
+                    "untuk mengevaluasi hasil pembelajaran mahasiswa "
+                    "pada akhir semester."
+                )
+            }
+
+        if is_uts:
+            return {
+                "type": "general",
+                "message": (
+                    "UTS adalah Ujian Tengah Semester yang dilaksanakan "
+                    "untuk mengevaluasi hasil pembelajaran mahasiswa "
+                    "pada pertengahan semester."
+                )
+            }
+
+    # =====================================================
+    # 4. KEYWORD AKADEMIK LOKAL
+    # =====================================================
+
+    keyword_map = {
+
+        "uas": [
+            "uas",
+            "ujian akhir semester",
+            "ujian akhir"
+        ],
+
+        "uts": [
+            "uts",
+            "ujian tengah semester",
+            "ujian tengah"
+        ],
+
+        "krs": [
+            "krs",
+            "pengisian krs",
+            "isi krs",
+            "mengisi krs",
+            "ambil krs"
+        ],
+
+        "kuliah": [
+            "kuliah",
+            "perkuliahan",
+            "masuk kuliah",
+            "mulai kuliah",
+            "perkuliahan dimulai"
+        ],
+
+        "registrasi": [
+            "registrasi",
+            "her registrasi",
+            "daftar ulang",
+            "registrasi ulang"
+        ],
+
+        "cuti": [
+            "cuti",
+            "cuti akademik"
+        ],
+
+        "seminar": [
+            "seminar",
+            "seminar skripsi",
+            "seminar proposal"
+        ],
+
+        "sidang": [
+            "sidang",
+            "sidang skripsi",
+            "ujian skripsi",
+            "yudisium"
+        ],
+
+        "skripsi": [
+            "skripsi",
+            "yudisium"
+        ],
+
+        "wisuda": [
+            "wisuda",
+            "acara wisuda"
+        ],
+
+        "nilai": [
+            "entry nilai",
+            "input nilai",
+            "masukkan nilai",
+            "nilai"
+        ]
+    }
+
+    # =====================================================
+    # 5. DETEKSI KATEGORI
+    # =====================================================
+
+    kategori_ditemukan = []
+
+    for kategori, keywords in keyword_map.items():
+
+        for keyword in keywords:
+
+            if keyword in text:
+                kategori_ditemukan.append(kategori)
+                break
+
+    if not kategori_ditemukan:
+        return None
+
+    # =====================================================
+    # 6. DETEKSI SEMESTER
+    # =====================================================
+
+    semester_filter = None
+
+    if "ganjil" in text:
+        semester_filter = "Ganjil"
+
+    elif "genap" in text:
+        semester_filter = "Genap"
+
+    # =====================================================
+    # 7. AMBIL DATA DARI DATABASE
+    # =====================================================
+
+    response = (
+        supabase.table("academic_data")
+        .select("*")
+        .eq("tahun_akademik", "2026/2027")
+        .execute()
     )
 
-    # Cari apakah pesan menyebut universitas/kampus tertentu
-    menyebut_kampus = any(
-        keyword in text
-        for keyword in university_keywords
-    )
+    data = response.data or []
 
-    # Jika menyebut kampus tetapi bukan UNIS,
-    # jangan gunakan database UNIS
-    if menyebut_kampus and not menyebut_unis:
+    # =====================================================
+    # 8. FILTER SEMESTER
+    # =====================================================
 
-        return {
-            "type": "blocked",
-            "message": (
-                "Maaf, sistem ini khusus menyediakan informasi "
-                "akademik Fakultas Teknik Universitas Islam "
-                "Syekh-Yusuf Tangerang (UNIS)."
-            )
-        }
+    if semester_filter:
 
+        data = [
+            item
+            for item in data
+            if item["semester"] == semester_filter
+        ]
+
+    # =====================================================
+    # 9. CARI DATA YANG RELEVAN
+    # =====================================================
+
+    hasil = []
+
+    for item in data:
+
+        kegiatan = item["kegiatan"].lower()
+
+        cocok = False
+
+        if "uas" in kategori_ditemukan:
+            if "ujian akhir semester" in kegiatan:
+                cocok = True
+
+        if "uts" in kategori_ditemukan:
+            if "ujian tengah semester" in kegiatan:
+                cocok = True
+
+        if "krs" in kategori_ditemukan:
+            if "krs" in kegiatan:
+                cocok = True
+
+        if "kuliah" in kategori_ditemukan:
+            if "perkuliahan" in kegiatan:
+                cocok = True
+
+        if "registrasi" in kategori_ditemukan:
+            if "registrasi" in kegiatan:
+                cocok = True
+
+        if "cuti" in kategori_ditemukan:
+            if "cuti akademik" in kegiatan:
+                cocok = True
+
+        if "seminar" in kategori_ditemukan:
+            if "seminar" in kegiatan:
+                cocok = True
+
+        if "sidang" in kategori_ditemukan:
+            if "sidang" in kegiatan or "yudisium" in kegiatan:
+                cocok = True
+
+        if "skripsi" in kategori_ditemukan:
+            if "skripsi" in kegiatan or "yudisium" in kegiatan:
+                cocok = True
+
+        if "wisuda" in kategori_ditemukan:
+            if "wisuda" in kegiatan:
+                cocok = True
+
+        if "nilai" in kategori_ditemukan:
+            if "nilai" in kegiatan:
+                cocok = True
+
+        if cocok:
+            hasil.append(item)
+
+    # =====================================================
+    # 10. JIKA TIDAK ADA DATA
+    # =====================================================
+
+    if not hasil:
+        return None
+
+    return {
+        "type": "database",
+        "data": hasil
+    }
     # =====================================================
     # 2. DETEKSI UAS DAN UTS
     # =====================================================
@@ -791,7 +990,113 @@ def new_chat():
         return jsonify({
             "error": str(e)
         }), 500
-    
+
+# =====================================================
+# FUNGSI check_academic_context
+# =====================================================
+
+def check_academic_context(pesan):
+    """
+    Mengecek konteks institusi pada pertanyaan akademik.
+
+    Return:
+    - "unis"    = merujuk ke UNIS
+    - "other"   = merujuk ke institusi lain
+    - "unknown" = tidak menyebut institusi
+    """
+
+    text = pesan.lower().strip()
+
+    # Jika tidak ada indikasi penyebutan institusi,
+    # anggap konteksnya adalah aplikasi UNIS.
+    institution_indicators = [
+        "universitas",
+        "kampus",
+        "institut",
+        "politeknik",
+        "sekolah tinggi",
+        "umt",
+        "unis",
+        "raharja"
+    ]
+
+    menyebut_institusi = any(
+        keyword in text
+        for keyword in institution_indicators
+    )
+
+    # Pertanyaan seperti:
+    # "Kapan UAS?"
+    # "Kapan KRS?"
+    # tidak perlu classifier GPT.
+    if not menyebut_institusi:
+        return "unknown"
+
+    # =====================================================
+    # CLASSIFIER GPT
+    # Hanya untuk menentukan konteks institusi.
+    # BUKAN untuk menjawab pertanyaan user.
+    # =====================================================
+
+    try:
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
+Anda adalah classifier konteks institusi akademik.
+
+Sistem ini KHUSUS untuk:
+Universitas Islam Syekh-Yusuf Tangerang (UNIS),
+Fakultas Teknik.
+
+Tugas Anda hanya menentukan konteks institusi dari pertanyaan pengguna.
+
+Aturan:
+- Jika pertanyaan merujuk kepada Universitas Islam Syekh-Yusuf Tangerang atau UNIS, jawab: UNIS
+- Jika pertanyaan merujuk kepada universitas, kampus, fakultas, atau institusi lain, jawab: OTHER
+- Jika tidak ada institusi yang disebutkan, jawab: UNKNOWN
+
+Jangan menjawab pertanyaan pengguna.
+Jangan memberikan penjelasan.
+Jawab hanya salah satu:
+UNIS
+OTHER
+UNKNOWN
+"""
+                },
+                {
+                    "role": "user",
+                    "content": text
+                }
+            ],
+            temperature=0,
+            max_tokens=5
+        )
+
+        hasil = response.choices[0].message.content.strip().upper()
+
+        if hasil == "UNIS":
+            return "unis"
+
+        if hasil == "OTHER":
+            return "other"
+
+        return "unknown"
+
+    except Exception as e:
+
+        print("=== CONTEXT CLASSIFIER ERROR ===")
+        print(str(e))
+        print("================================")
+
+        # Jika classifier gagal,
+        # jangan mengambil risiko memberikan data
+        # akademik UNIS kepada institusi lain.
+        return "other"
+
 # =========================
 # CHAT GPT (MULTI TURN)
 # =========================
@@ -836,22 +1141,33 @@ def chat():
                 return jsonify({
                     "respon_gpt": message
                 }), 200
+        
         # =========================
         # CEK DATABASE LOKAL
         # =========================
+
+        # Cek konteks institusi terlebih dahulu
+        context = check_academic_context(pesan)
+
+        # Jika user menyebut kampus/institusi lain,
+        # JANGAN akses database akademik UNIS
+        if context == "other":
+
+            return jsonify({
+                "respon_gpt": (
+                    "⚠️ **Peringatan**\n\n"
+                    "Informasi akademik yang tersedia pada sistem ini "
+                    "khusus untuk Fakultas Teknik Universitas "
+                    "Islam Syekh-Yusuf Tangerang (UNIS)."
+                ),
+                "source": "validation"
+            })
+
+        # Jika konteks UNIS atau tidak menyebut kampus,
+        # baru periksa database lokal
         local_data = search_academic_data(pesan)
 
         if local_data:
-
-            # =========================
-            # UNIVERSITAS LAIN
-            # =========================
-            if local_data["type"] == "blocked":
-
-                return jsonify({
-                    "respon_gpt": local_data["message"],
-                    "source": "validation"
-                })
 
             # =========================
             # UAS / UTS UMUM
@@ -868,7 +1184,10 @@ def chat():
             # =========================
             if local_data["type"] == "database":
 
-                jawaban = "📚 **Informasi Akademik Fakultas Teknik UNIS**\n\n"
+                jawaban = (
+                    "📚 **Informasi Akademik "
+                    "Fakultas Teknik UNIS**\n\n"
+                )
 
                 for item in local_data["data"]:
 
